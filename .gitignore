@@ -108,4 +108,6 @@ $RECYCLE.BIN/
 *.svg
 *.png
 TEMP_*
+*.secret
+!Makefile
 
