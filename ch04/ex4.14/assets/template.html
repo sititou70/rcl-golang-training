@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>{{.RepoName}}: bugs and milestones tracker</title>
+  </head>
+
+  <body>
+    <h1>{{.Bugs.TotalCount}} bugs</h1>
+    <table>
+      <tr style="text-align: left">
+        <th>#</th>
+        <th>State</th>
+        <th>User</th>
+        <th>Title</th>
+      </tr>
+      {{range .Bugs.Items}}
+      <tr>
+        <td><a href="{{.HTMLURL}}">{{.Number}}</a></td>
+        <td>{{.State}}</td>
+        <td><a href="{{.User.HTMLURL}}">{{.User.Login}}</a></td>
+        <td><a href="{{.HTMLURL}}">{{.Title}}</a></td>
+      </tr>
+      {{end}}
+    </table>
+
+    <h1>milestones</h1>
+    <table>
+      <tr style="text-align: left">
+        <th>#</th>
+        <th>State</th>
+        <th>Creator</th>
+        <th>Title</th>
+        <th>Progress</th>
+      </tr>
+      {{range .Milestones}}
+      <tr>
+        <td><a href="{{.HTMLURL}}">{{.Number}}</a></td>
+        <td>{{.State}}</td>
+        <td><a href="{{.Creator.HTMLURL}}">{{.Creator.Login}}</a></td>
+        <td><a href="{{.HTMLURL}}">{{.Title}}</a></td>
+        <td>{{progress .OpenIssues .ClosedIssues}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </body>
+</html>
