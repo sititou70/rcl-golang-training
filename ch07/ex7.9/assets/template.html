@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Track List</title>
+
+    <style>
+      th {
+        padding: 10px;
+        cursor: pointer;
+      }
+      th:hover {
+        background: #aaa;
+      }
+      th::after {
+        margin-left: 0.5em;
+      }
+      th[data-order="asc"]::after {
+        content: "[▲" attr(data-key-index) "]";
+      }
+      th[data-order="desc"]::after {
+        content: "[▼" attr(data-key-index) "]";
+      }
+
+      td {
+        padding: 0 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Track List</h1>
+    <a href="./">reset order</a>
+    <table>
+      <tr style="text-align: left">
+        <th id="Title">Title</th>
+        <th id="Artist">Artist</th>
+        <th id="Album">Album</th>
+        <th id="Year">Year</th>
+        <th id="Length">Length</th>
+      </tr>
+      {{range .}}
+      <tr>
+        <td>{{.Title}}</td>
+        <td>{{.Artist}}</td>
+        <td>{{.Album}}</td>
+        <td>{{.Year}}</td>
+        <td>{{.Length}}</td>
+      </tr>
+      {{end}}
+    </table>
+
+    <script>
+      // parse params
+      const keys_param = JSON.parse(
+        new URL(location.href).searchParams.get("keys")
+      );
+      const keys = keys_param ? keys_param : [];
+
+      // set header data
+      keys.forEach((x, i) => {
+        const splited = x.split(":");
+        const key = splited[0];
+        const order = splited[1];
+
+        const th = document.querySelector(`#${key}`);
+        th.dataset.order = order;
+        th.dataset.keyIndex = i + 1;
+      });
+
+      // set th handler
+      Array.from(document.querySelectorAll("th")).forEach((elem) => {
+        elem.addEventListener("click", (e) => {
+          const key = e.target.innerText;
+          const isClicked =
+            keys.find((x) => x.split(":")[0] === key) !== undefined;
+
+          const newKeys = isClicked
+            ? keys.map((x) => {
+                const splited = x.split(":");
+                const current_key = splited[0];
+                const order = splited[1];
+                if (current_key !== key) return x;
+
+                return `${current_key}:${order === "asc" ? "desc" : "asc"}`;
+              })
+            : [...keys, `${key}:asc`];
+
+          url = new URL(location.href);
+          location.href = `${url.origin}${url.pathname}?keys=${JSON.stringify(
+            newKeys
+          )}`;
+        });
+      });
+    </script>
+  </body>
+</html>
