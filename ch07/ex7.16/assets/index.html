@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>My Calculator</title>
+  </head>
+
+  <body>
+    <h1>My Calculator</h1>
+    <h2>expression</h2>
+    <input type="text" id="expression" />
+    <h2>environment</h2>
+    <textarea id="environment">// name=123.456</textarea>
+
+    <h2>result</h2>
+    <div id="result"></div>
+
+    <script>
+      let latest_fetch;
+
+      const evalExpression = async () => {
+        const expr = document.querySelector("#expression").value;
+        const env = document
+          .querySelector("#environment")
+          .value.split("\n")
+          .filter((x) => x !== "")
+          .filter((x) => x.indexOf("//") === -1)
+          .map((x) => x.split("="))
+          .map((x) => ({ [x[0]]: x[1] }))
+          .reduce((s, x) => ({ ...s, ...x }), {});
+
+        const latest = (latest_fetch = Symbol("fetch start"));
+        const url = new URL(location.href);
+        url.pathname = "eval";
+        url.searchParams.set(
+          "q",
+          JSON.stringify({
+            expr,
+            env,
+          })
+        );
+        const res = await (await fetch(url.href)).text();
+
+        if (latest_fetch === latest)
+          document.querySelector("#result").innerText = res;
+      };
+
+      document
+        .querySelector("#expression")
+        .addEventListener("keyup", evalExpression);
+      document
+        .querySelector("#environment")
+        .addEventListener("keyup", evalExpression);
+    </script>
+  </body>
+</html>
