@@ -3,15 +3,15 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 	"unicode"
 )
 
 func reverseUTF8(s []byte) error {
-	var i int
+	i := 0
 	for i < len(s) {
-		bytes, err := getUTF8CharSize(s, i)
+		bytes, err := getUTF8CharSize(s[i:])
 		if err != nil {
 			return err
 		}
@@ -23,16 +23,16 @@ func reverseUTF8(s []byte) error {
 
 	return nil
 }
-func getUTF8CharSize(s []byte, i int) (int, error) {
-	_, bytes, err := decodeUTF8Rune(s, i)
+func getUTF8CharSize(s []byte) (int, error) {
+	_, bytes, err := decodeUTF8Rune(s)
 	if err != nil {
 		return -1, err
 	}
 
 	additionalBytes := 0
-	i += bytes
+	i := bytes
 	for i < len(s) {
-		r, bytes, err := decodeUTF8Rune(s, i)
+		r, bytes, err := decodeUTF8Rune(s[i:])
 		if err != nil {
 			return -1, err
 		}
@@ -66,19 +66,19 @@ func isMark(r rune) bool {
 
 	return false
 }
-func decodeUTF8Rune(s []byte, i int) (rune, int, error) {
+func decodeUTF8Rune(s []byte) (rune, int, error) {
 	switch {
-	case s[i]&0x80 == 0x00:
-		return rune(s[i]), 1, nil
-	case s[i]&0xE0 == 0xC0:
-		return rune(s[i]&0x1F)<<6 | rune(s[i+1]&0x3F), 2, nil
-	case s[i]&0xF0 == 0xE0:
-		return rune(s[i]&0x0F)<<12 | rune(s[i+1]&0x3F)<<6 | rune(s[i+2]&0x3F), 3, nil
-	case s[i]&0xF8 == 0xF0:
-		return rune(s[i]&0x07)<<18 | rune(s[i+1]&0x3F)<<12 | rune(s[i+2]&0x3F)<<6 | rune(s[i+3]&0x3F), 4, nil
+	case s[0]&0x80 == 0x00:
+		return rune(s[0]), 1, nil
+	case s[0]&0xE0 == 0xC0:
+		return rune(s[0]&0x1F)<<6 | rune(s[1]&0x3F), 2, nil
+	case s[0]&0xF0 == 0xE0:
+		return rune(s[0]&0x0F)<<12 | rune(s[1]&0x3F)<<6 | rune(s[2]&0x3F), 3, nil
+	case s[0]&0xF8 == 0xF0:
+		return rune(s[0]&0x07)<<18 | rune(s[1]&0x3F)<<12 | rune(s[2]&0x3F)<<6 | rune(s[3]&0x3F), 4, nil
 	}
 
-	return 0, -1, errors.New("invalid UTF-8 encoding!")
+	return 0, -1, fmt.Errorf("invalid UTF-8 encoding!")
 }
 func reverseBytes(s []byte) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
@@ -108,20 +108,19 @@ func TestReverseUTF8(t *testing.T) {
 	}
 
 	for _, c := range cases {
+		fmt.Printf("--------------------\n")
 		origBytes := []byte(c.orig)
 		err := reverseUTF8(origBytes)
 		if err != nil {
-			t.Errorf("--------------------\n")
 			t.Errorf("%s\n", err.Error())
 			t.Errorf("expected: %v\n", c.expect)
 		}
 
 		reversed := string(origBytes)
 		if reversed != c.expect {
-			t.Errorf("--------------------\n")
 			t.Errorf("expected: %v, but actual: %v\n", c.expect, reversed)
-			t.Errorf("expect: % x\n", c.expect)
-			t.Errorf("actual: % x\n", reversed)
 		}
+		fmt.Printf("expect: % x\n", c.expect)
+		fmt.Printf("actual: % x\n", reversed)
 	}
 }
