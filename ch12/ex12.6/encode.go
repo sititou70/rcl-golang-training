@@ -74,17 +74,15 @@ func encode(buf *bytes.Buffer, v reflect.Value) error {
 	case reflect.Struct: // ((name value) ...)
 		buf.WriteByte('(')
 		for i := 0; i < v.NumField(); i++ {
-			var vb bytes.Buffer
-			if err := encode(&vb, v.Field(i)); err != nil {
-				return err
-			}
-
-			if vb.String() != "nil" {
+			if !v.Field(i).IsZero() {
 				if i > 0 {
 					buf.WriteByte(' ')
 				}
-
-				fmt.Fprintf(buf, "(%s %s)", v.Type().Field(i).Name, vb.String())
+				fmt.Fprintf(buf, "(%s ", v.Type().Field(i).Name)
+				if err := encode(buf, v.Field(i)); err != nil {
+					return err
+				}
+				buf.WriteRune(')')
 			}
 		}
 		buf.WriteByte(')')
