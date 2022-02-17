@@ -1,0 +1,340 @@
+# Go研修のおもひで
+
+雫石 卓耶
+Takuya Shizukuishi
+
+2022/02/18
+
+
+## 思い出
+
+1. 寄り道の楽しみ
+1. 知識を体系的に習得するという体験
+
+
+## 寄り道が楽しかった
+
+Go言語自体の知識はもちろん得られたが，その周りの知識も同時に補強された．例えば
+
+- コンピュータの構造とキャッシュ
+  - 1章，加藤佐之輔さんの「カウンタを表示する際にMutexをLockしているのはなぜでしょうか？」に対する回答
+- 並行処理の複雑さ，テストの難しさ
+  - 8，9章
+- RFCの読み方
+  - 8章，FTPサーバーの作成
+
+
+## 寄り道する上で面白かった課題の紹介：4.7
+
+UTF-8でエンコードされた文字列が格納された`[]byte`スライスがあり，そのスライスの逆順を新たなメモリを割り当てること無く求めよ
+
+↓一般的な回答
+
+```
+func reverseUTF8(s []byte) error {
+	i := 0
+	for i < len(s) {
+		_, bytes := utf8.DecodeRune(s[i:])
+
+		reverseBytes(s[i : i+bytes])
+		i += bytes
+	}
+	reverseBytes(s)
+
+	return nil
+}
+
+func reverseBytes(s []byte) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+```
+
+
+## 一般的な回答の動作例
+
+```
+func TestReverseUTF8(t *testing.T) {
+	var cases = []struct {
+		orig   string
+		expect string
+	}{
+		{"12345", "54321"},
+		{"a©あ😄", "😄あ©a"},
+	}
+  
+  ...
+```
+
+実行すると
+
+```
+$ go test *
+ok      command-line-arguments  0.001s
+```
+
+→うごく
+
+
+## ところが
+
+テストケース，`{"竈門禰󠄀豆子", "子豆禰󠄀門竈"},`を追加してみたら
+
+```
+$ go test *
+expect: e5 ad 90 e8 b1 86 e7 a6 b0 f3 a0 84 80 e9 96 80 e7 ab 88
+actual: e5 ad 90 e8 b1 86 f3 a0 84 80 e7 a6 b0 e9 96 80 e7 ab 88
+--- FAIL: TestReverseUTF8 (0.00s)
+    main_test.go:110: expected: 子豆禰󠄀門竈, but actual: 子豆󠄀禰門竈
+FAIL
+FAIL    command-line-arguments  0.001s
+FAIL
+```
+
+→落ちた！
+
+なぜ？
+
+
+## ---
+
+→そもそも，私は **Unicode**や**UTF-8** というものを理解していないのでは？
+
+
+## ---
+
+> ![Unicode](01.png)
+> 
+> https://ja.wikipedia.org/wiki/Unicode
+
+→そもそもUnicodeには文字集合と符号化方式があって…
+
+
+## ---
+
+> ![UTF-8](02.png)
+> 
+> https://ja.wikipedia.org/wiki/UTF-8
+
+→UTF-8はUnicodeコードポイントを符号化する方式の一種なのか
+
+→自分でもデコードできるかも？
+
+
+## UTF-8を自分でデコードしてみた
+
+`_, bytes := utf8.DecodeRune(s[i:])`をやめて
+
+```
+func decodeUTF8Rune(s []byte) (rune, int, error) {
+	switch {
+	case s[0]&0x80 == 0x00:
+		return rune(s[0]), 1, nil
+	case s[0]&0xE0 == 0xC0:
+		return rune(s[0]&0x1F)<<6 | rune(s[1]&0x3F), 2, nil
+	case s[0]&0xF0 == 0xE0:
+		return rune(s[0]&0x0F)<<12 | rune(s[1]&0x3F)<<6 | rune(s[2]&0x3F), 3, nil
+	case s[0]&0xF8 == 0xF0:
+		return rune(s[0]&0x07)<<18 | rune(s[1]&0x3F)<<12 | rune(s[2]&0x3F)<<6 | rune(s[3]&0x3F), 4, nil
+	}
+
+	return 0, -1, fmt.Errorf("invalid UTF-8 encoding!")
+}
+```
+
+としてみる
+
+```
+$ go test *
+ok      command-line-arguments  0.001s
+```
+
+→「竈門禰󠄀豆子」以外に対しては動いた！
+
+
+## UTF-8を完全理解したところで
+
+あらためて「竈門禰󠄀豆子」をじっくり見てみた
+
+> ![utf8 note](11.png)
+
+→`U+7AC8`, `U+9580`, `U+79B0`, `U+E0100`, `U+8C46`, `U+5B50`
+
+コードポイントが6個？
+
+
+## 禰󠄀は異体字
+
+文字のバリエーションを表す方式
+
+> ![variant](03.png)
+> 
+> https://glyphwiki.org/wiki/u79b0
+
+
+## 禰󠄀は異体字
+
+文字のバリエーションを表す方式
+
+ベースとなる文字 + セレクタ
+
+今回の場合は`U+79B0` + `U+E0100`
+
+何も考えずにコードポイントで反転すると
+
+`U+E0100` + `U+79B0`
+
+となってしまう
+
+→セレクタを判別するには？
+
+
+## セレクタはMarkカテゴリに含まれるらしい
+
+> ![mark wiki](04.png)
+> 
+> https://en.wikipedia.org/wiki/Unicode_character_property
+
+
+## Unicodeパッケージには便利な関数が
+
+> ![ismark](05.png)
+> 
+> https://go言語.com/pkg/unicode/
+
+→でもせっかくなら自分で実装したい
+
+→いうてカテゴリーテーブルを探索してるだけでしょ？
+
+
+## isMarkを追いかけてみたら1
+
+> ![ismark](06.png)
+> 
+> https://ref.gotd.dev/src/unicode/letter.go.html#line-168
+
+→コード範囲でテーブル分割してる…
+
+→フットプリント削減のため
+
+
+## isMarkを追いかけてみたら2
+
+> ![ismark](07.png)
+> 
+> https://ref.gotd.dev/src/unicode/letter.go.html#line-122
+
+→テーブルが一定サイズ超えたら線形→2分探索に切り替えてる…
+
+→高速化のため
+
+
+## isMarkを追いかけてみて
+
+単純そうな関数でも，内部では工夫されてるんだなぁ…
+
+→`unicode.Mark`だけに依存しつつ，今回は線形探索のみで実装
+
+```
+func isMark(r rune) bool {
+	rune32 := uint32(r)
+	if rune32 <= uint32(unicode.Mark.R16[len(unicode.Mark.R16)-1].Hi) {
+		rune16 := uint16(r)
+		for _, range16 := range unicode.Mark.R16 {
+			if range16.Lo <= rune16 && rune16 <= range16.Hi && (range16.Stride == 1 || (rune16-range16.Lo)%range16.Stride == 0) {
+				return true
+			}
+		}
+	} else {
+		for _, range32 := range unicode.Mark.R32 {
+			if range32.Lo <= rune32 && rune32 <= range32.Hi && (range32.Stride == 1 || (rune32-range32.Lo)%range32.Stride == 0) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+```
+
+
+## Markを考慮したら
+
+`{"竈門禰󠄀豆子", "子豆禰󠄀門竈"}`を追加しても
+
+```
+$ go test *
+ok      command-line-arguments  0.001s
+```
+
+動いた！
+
+さらに`{"Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢L̠ͨͧͩ͘G̴̻͈͍͔̹̑͗̎̅͛́Ǫ̵̹̻̝̳͂̌̌͘!͖̬̰̙̗̿̋ͥͥ̂ͣ̐́́͜͞", "!͖̬̰̙̗̿̋ͥͥ̂ͣ̐́́͜͞Ǫ̵̹̻̝̳͂̌̌͘G̴̻͈͍͔̹̑͗̎̅͛́L̠ͨͧͩ͘A̴̵̜̰͔ͫ͗͢Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍"}`を追加しても
+
+```
+$ go test *
+ok      command-line-arguments  0.001s
+```
+
+やはり動いた！
+
+
+## そして書記素クラスタへ…
+
+結局の所，今回の課題では **文字単位で** 文字列を反転したいということ．
+
+では，そもそも文字の単位とは？というと， *書記素クラスタ* としてしっかり定義されているらしい
+
+> ![Unicode Text Segmentation](10.png)
+> 
+> http://unicode.org/reports/tr29/
+
+まだ実装していない（暇があればやりたい）（たぶんやらない）
+
+
+## ---
+
+研修は寄り道の機会を提供してくれた
+
+
+## 知識を体系的に習得するという体験
+
+「本を1冊通して読む」という経験がなかった
+
+→適当に検索して満足したら終わり
+
+本を読むということに自信がなかった
+
+→頭の回転が遅いほうだから，「読み切るのにどれだけ時間がかかるんだ」という印象
+
+
+## ---
+
+しかし，実際にやってみると案外スムーズだった
+
+→2021/11/08に読了・課題完了
+
+// 教科書着弾：2021/08/21 18:02（社内Slackより）
+// 読了・課題完了：2021/11/08 21:38（コミットより）
+
+（注意）
+
+- 無趣味なので時間があった
+- 一部行えていない課題がある
+  - さきほどの12.7など
+- 課題の出来が良いとは言っていない
+  - すごい人はすごいので
+
+![おりさのさん](08.png)
+
+
+## ともあれ
+
+研修のおかげで，順を追って理解していくことが自分に合っていると気づけた
+
+→現在は新しい本に挑戦している
+
+![books](09.png)
+
+その基礎として研修が役立った
